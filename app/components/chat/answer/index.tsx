@@ -1,6 +1,6 @@
 'use client'
 import type { FC } from 'react'
-import React from 'react'
+import React, { useState } from 'react'
 import { HandThumbDownIcon, HandThumbUpIcon } from '@heroicons/react/24/outline'
 import { useTranslation } from 'react-i18next'
 import LoadingAnim from '../loading-anim'
@@ -54,6 +54,20 @@ const IconWrapper: FC<{ children: React.ReactNode | string }> = ({ children }) =
   </div>
 }
 
+type ParsedMessage = {
+  tag: string;
+  message: string;
+};
+
+const parseMultiAgentMessages = (content: string): ParsedMessage[] | null => {
+  const regex = /<(\w+)>([\s\S]*?)<\/\1>/g;
+  const matches = Array.from(content.matchAll(regex));
+  if (matches.length === 0) {
+    return null;
+  }
+  return matches.map(match => ({ tag: match[1], message: match[2].trim() }));
+};
+
 type IAnswerProps = {
   item: ChatItem
   feedbackDisabled: boolean
@@ -74,6 +88,9 @@ const Answer: FC<IAnswerProps> = ({
   const isAgentMode = !!agent_thoughts && agent_thoughts.length > 0
 
   const { t } = useTranslation()
+
+  // State for hover effect on multi-agent messages
+  const [isHoveringGroup, setIsHoveringGroup] = useState(false);
 
   /**
  * Render feedback results (distinguish between users and administrators)
@@ -165,6 +182,41 @@ const Answer: FC<IAnswerProps> = ({
     </div>
   )
 
+  const parsedMultiAgentContent = parseMultiAgentMessages(content);
+
+  if (parsedMultiAgentContent && !isAgentMode) {
+    return (
+      <div
+        className="relative"
+        onMouseEnter={() => setIsHoveringGroup(true)}
+        onMouseLeave={() => setIsHoveringGroup(false)}
+      >
+        {parsedMultiAgentContent.map((msg, index) => (
+          <div key={`${id}-agentmsg-${index}`} className="flex items-start mb-4">
+            <div className={`${s.answerIcon} w-10 h-10 shrink-0 flex items-center justify-center bg-gray-100 rounded-full p-2`}>
+              <OpeningStatementIcon className="w-full h-full text-gray-600" />
+            </div>
+            <div className={`${s.answerWrap} ml-2`}>
+              <div className={`${s.answer} relative text-sm text-gray-900`}>
+                <div className="py-3 px-4 bg-gray-50 rounded-tr-2xl rounded-b-2xl shadow-sm">
+                  <strong className="block mb-1 font-semibold text-gray-700">{msg.tag}:</strong>
+                  <Markdown content={msg.message} />
+                </div>
+                {/* Feedback section for the first bubble, shown on group hover */}
+                {index === 0 && isHoveringGroup && !feedbackDisabled && !item.feedbackDisabled && (
+                  <div className="absolute top-[-14px] right-[-14px] flex flex-row justify-end gap-1 z-10">
+                    {renderItemOperation()}
+                    {renderFeedbackRating(feedback?.rating)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div key={id}>
       <div className='flex items-start'>
@@ -189,9 +241,22 @@ const Answer: FC<IAnswerProps> = ({
                 )
                 : (isAgentMode
                   ? agentModeAnswer
-                  : (
-                    <Markdown content={content} />
-                  ))}
+                  : (() => {
+                    const parsedMessages = parseMultiAgentMessages(content);
+                    if (parsedMessages) {
+                      return (
+                        <div>
+                          {parsedMessages.map((msg, index) => (
+                            <div key={index} className="mb-2">
+                              <strong className="font-semibold">{msg.tag}:</strong>
+                              <Markdown content={msg.message} />
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                    return <Markdown content={content} />;
+                  })())}
             </div>
             <div className='absolute top-[-14px] right-[-14px] flex flex-row justify-end gap-1'>
               {!feedbackDisabled && !item.feedbackDisabled && renderItemOperation()}

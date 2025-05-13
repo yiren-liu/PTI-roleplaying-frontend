@@ -49,3 +49,8 @@ yarn.lock
 
 # pmpm
 pnpm-lock.yaml
+
+
+# cursor
+.cursor
+.cursorignore
